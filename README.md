@@ -24,7 +24,7 @@ a_vaultcnt=4
 8 - Store a secret into apikey with field webapp=testvalueinthefield.
  
 
-How to create the Vaul HA Cluster
+How to create the Vault HA Cluster
 Clone the current repository or only the current script create_cluster.sh
 If the vault directory is present then a cleanu-up is needed.
 In this scenario the script is singaling the vault directory, delete the vault directory and exit.
