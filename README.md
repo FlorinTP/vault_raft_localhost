@@ -40,6 +40,7 @@ RETRYS
 - Adapt the TEST time for which the Servers should be up and running.
 - Execute the script as
 ```
+cd vault_raft_localhost
 bash create_cluster.sh
 ```
 - Open another terminal console on the host and 
