@@ -54,11 +54,11 @@ and oobserve the root_token files needed to login to UI.
 
 
 # Additional facts:
-- If the vault directory is present then a cleanu-up is needed.
-In this scenario the script is singaling the vault directory and echo the  delete instructions and exit.
-This is expected behavior on multiple executions.
+- If the vault directory is present then a clean-up is needed.
+In this scenario, the script is singaling the vault directory presence and prints the delete instructions and exit.
+This is expected behavior on multiple executions of the script.
 
-- For test purpose, the variable DEBUG may be set to a number value greater than "0".
+- For test purposes, the variable DEBUG may be set to a number value greater than "0".
 This will allow the validation and the test scenarios in a step-by-step fashion.
 - While running in DEBUG mode the script will wait for confirmation for every block action.
 
