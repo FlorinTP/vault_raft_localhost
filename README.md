@@ -27,6 +27,11 @@ a_vaultcnt=4
 
 # How to create the Vault HA Cluster
 Clone the current repository or only the current script create_cluster.sh
+```
+git clone github.com/FlorinTP/vault_raft_localhost
+```
+
+
 If the vault directory is present then a cleanu-up is needed.
 In this scenario the script is singaling the vault directory, delete the vault directory and exit.
 
