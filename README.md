@@ -14,15 +14,17 @@ brew install bash
 
 # Running the Vault HA Cluster with Raft integrated storage
 The following block actions are executed by the functions from the script:
- - validating the environment
- - creating the transit Vault server
- - start and unseal the first Vault Server used as transit for unsealing key
- - Create the unseal transit key
- - Create Vault configuration files, in a dynamic way, cluster nodes (n-1).
-  - For example by specifying the variable a_vaultcnt=6. the number of Vault server is 6 and it is composed from one transit "in memory" Vault server and 5 Vault servers running in a HA Cluster with Raft as storage backed.
- - Recover the shared key from initialization from transit Vaul and create a temporary store of VAULT_TOKEN (only for testing purposes)
- - Enable a secret engine type KV in the path kv of version kv-v2
+ - Validating the environment directory.
+ - Creating the transit Vault server as (vault-1).
+ - Start and unseal the first Vault Server (vault-i) used as transit for store the unsealing transit key.
+ - Create the unseal transit key.
+ - Create the Vault configuration files, in a dynamic way, cluster nodes (n-1) (./vault/config/vault-1 ./vault/config/vault-2 ...).
+ - For example, by specifying the variable a_vaultcnt=6, the number of Vault servers created is 6: one transit "in memory" Vault server and 5 Vault servers running in a HA Cluster with Raft as storage backed.
+ - Recover the shared key from initialization from transit Vault (vault-1) and create a temporary store of VAULT_TOKEN (only for testing purposes).
+ - Enable a secret engine type KV in the path kv of version kv-v2.
  - Store a secret into apikey with field webapp=testvalueinthefield.
+ - Stop every Vault server (vault-n, vault-(n-1),..., vault-2, vault-1).
+ - Clean-up the files and folders: ./vault/config ./vault/data ./vault/logs
  
 
 # How to create the Vault HA Cluster
@@ -35,16 +37,17 @@ git clone github.com/FlorinTP/vault_raft_localhost
 - Adapt the number of retries for actions by modifying the variable
 (default RETRY=6)
 RETRYS
-- Adapt the DEBUG mode by modifying the variable
+- Choose the running mode by modifying number value from the initilization variable DEBUG 
 (default DEBUG=0)
-- Adapt the TEST time for which the Servers should be up and running.
+- For any non-zero value DEBUG the script will run in interactive mode and will prompt for actions.
+- While runing in non-interactive mode (DEBUG="0") the variable TESTWINDOW will configure the wait time for keeping the Vault Servers running. If the script is running in interactive mode (debug mode), then this variable is ingnored. 
 - Execute the script as
 ```
 cd vault_raft_localhost
 bash create_cluster.sh
 ```
 - Open another terminal console on the host and 
-and oobserve the root_token files needed to login to UI.
+and observe the root_token files needed to login to UI.
 - Open a browser and login to Vault (transit) Server at http://localhost:8200
 (* using the token from vault/config/root_token-vault_1 )
 - For login to the Vault cluster you may use any of the cluster nodes (port= 10*n + 8200)
