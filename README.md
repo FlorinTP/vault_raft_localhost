@@ -50,7 +50,7 @@ and oobserve the root_token files needed to login to UI.
 - For example, for UI access on node 2 you may use the address http://localhost:8210
 - For UI access on node 3 you may use the address http://localhost:8220
 - For UI access on node 4 you may use the address http://localhost:8230
-(** by using the VAULT_TOKEN from root_token-vault_2 )
+(** by using the VAULT_TOKEN from vault/config/root_token-vault_2 )
 
 
 # Additional facts:
