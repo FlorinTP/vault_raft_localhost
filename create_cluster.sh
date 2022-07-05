@@ -1,24 +1,24 @@
 #!/bin/bash 
-#echo Default directories
+
+###  VARIABLES BLOCK
 export hash_padding="#############"
 export a_workingdir="$(pwd)/vault" 
 export a_basedir=$(basename "${a_workingdir}")
 export a_maindir=$(dirname "${a_workingdir}")
-export a_ifname='en0'
-export a_ipaddr=$(ifconfig ${a_ifname}|grep 'broadcast'|awk '{print $2}')
+#Interface is not used yet.
+##export a_ifname='en0'
+#export a_ipaddr=$(ifconfig ${a_ifname}|grep 'broadcast'|awk '{print $2}')
 #####
-# TESTWINDOW  is the time reserved for testing.
-# If the time will reach to the limit then the Vault servers will be stopped and cleanup of files will remove the leftovers.a
-####
 
+#Number of Vault cluster nodes (n-1) as the transit server will not make part of the cluster.
 export a_vaultcnt=6
-export TESTWINDOW=6
+# TESTWINDOW is the time reserved for testing in seconds. (default is '120'))
+export TESTWINDOW=120
+# DEBUG initialized with a value greater than '0' will make the script prompt for every major activity. (default is '0')
 export DEBUG=0
+# RETRYS is the maximum number of retries on validating the correct start of the Vault server.( default is '6')
 export RETRYS=6
-
 ###
-[ $DEBUG -gt 0 ] && ( echo -ne "${hash_padding}\nUsing: ${a_workingdir} as base ? (<Enter> for default path)"  && read a_ans )
-
 
 ### FUNCTION BLOCK
 function create_vault_conf()
@@ -104,7 +104,7 @@ function vault_cleanup()
   echo -ne "${hash_padding}Cleanup the vault logs and data files...\n"
   cd "${a_workingdir}/config"
   # safety net for non existent directories
-  [ $? -eq 0 ] && rm t_addon.txt all_vault_servers.txt 2>/dev/null && find . -type f  -print -exec rm -rf -- {} \;
+  [ $? -eq 0 ] && rm recovery_key-vault_2 unseal_key-vault_1 unseal_operation_vault_1.txt t_addon.txt all_vault_servers.txt 2>/dev/null && find . -type f -name '*.hcl' -print -exec rm -rf -- {} \;
   cd "${a_workingdir}/data"
   if [ $? -eq 0 ] ; then
 	 for tdir in $(ls) ; do
@@ -166,7 +166,7 @@ function start_vault()
 
  for i_cnt in $(seq 2 ${a_vaultcnt} ) ; do
   echo " Starting Vault Server $i_cnt..."
-  mkdir -p "${a_workingdir}/data/vault_${i_cnt}"
+  #mkdir -p "${a_workingdir}/data/vault_${i_cnt}"
   local icorrection=$(( $i_cnt - 1 ))
   local port_i=$(( $icorrection * 10  + 8200 ))
   local port_iha=$(( $icorrection * 10  + 8201 ))
@@ -283,7 +283,7 @@ function stop_vault()
      ##    vault operator raft remove-peer
 
      local list_pids=$(ps -fe|grep vault|grep hcl|grep -e '-config=./config_'|awk '{print $2," "}')
-     pidtokill=$(cat ${a_workingdir}/logs/vault-${i_cnt}.pid)
+     pidtokill=$(cat ${a_workingdir}/logs/vault-${i_cnt}.pid 2>/dev/null)
      for pidtocheck in  $(echo  ${list_pids}) ; do
 	     if [[ $pidtokill -eq $pidtocheck ]] ; then
 		echo "Found the Vault-${i_cnt} PID $pidtokill into ${list_pids}"
@@ -299,9 +299,13 @@ function stop_vault()
 
 
 ### MAIN BODY
-if [ -d "${a_workingdir}" ] ; then
+[ $DEBUG -gt 0 ] && ( echo -ne "${hash_padding}\nUsing: ${a_workingdir} as base ? (<Enter> for default path)"  && read a_ans )
+if [ -d "${a_workingdir}/data" ] ; then
+  stop_vault
   echo "Directory already present. Cleanup and re-execute the script."
-  cd "${a_maindir}" && rm -rf "${a_basedir}"
+  echo "Execute: 
+  cd ${a_maindir} && rm -rf ${a_basedir}/data
+  cd ${a_maindir} && rm -rf ${a_basedir}/logs"
   exit 1
 else
   echo "Using ${a_maindir} and ${a_basedir}"
@@ -322,7 +326,9 @@ validate_vault
 if [ $DEBUG -gt 0 ] ; then
    echo -ne "${hash_padding}\nTesting and validation OK? (<Enter> for ending thje script)"  && read a_ans 
 else
-   echo -ne "${hash_padding}\nLeaving the servers running for $TESTWINDOW";sleep ${TESTWINDOW}
+   echo -ne "${hash_padding} Vault(Transit) TOKEN is: $(cat ${a_wrokingdir}/config/root_token-vault_1) \n"
+   echo -ne "${hash_padding} HA Vault(NODE) TOKEN is: $(cat ${a_wrokingdir}/config/root_token-vault_2) \n"
+   echo -ne "${hash_padding} \nLeaving the servers running for $TESTWINDOW";sleep ${TESTWINDOW}
 fi
 echo -ne  "${hash_padding}Done.\n"
 stop_vault
