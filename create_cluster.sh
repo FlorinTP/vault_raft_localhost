@@ -5,9 +5,17 @@ export a_workingdir="$(pwd)/vault"
 export a_basedir=$(basename "${a_workingdir}")
 export a_maindir=$(dirname "${a_workingdir}")
 export a_ifname='en0'
-export a_vaultcnt=6
 export a_ipaddr=$(ifconfig ${a_ifname}|grep 'broadcast'|awk '{print $2}')
+#####
+# TESTWINDOW  is the time reserved for testing.
+# If the time will reach to the limit then the Vault servers will be stopped and cleanup of files will remove the leftovers.a
+####
+
+export a_vaultcnt=6
+export TESTWINDOW=6
 export DEBUG=0
+export RETRYS=6
+
 ###
 [ $DEBUG -gt 0 ] && ( echo -ne "${hash_padding}\nUsing: ${a_workingdir} as base ? (<Enter> for default path)"  && read a_ans )
 
@@ -15,9 +23,10 @@ export DEBUG=0
 ### FUNCTION BLOCK
 function create_vault_conf()
 {
-  echo "$hash_padding===${FUNCNAME[*]}==== "
+  echo "${hash_padding}===${FUNCNAME[*]}==== "
   cd "${a_workingdir}/config" 
-
+  # safety net for non existent directories
+  [ $? -gt 0 ] && exit 1
   # Create ALL the join blocks of the Vault Servers if a_vault_cnt is greater than 1
   >all_vault_servers.txt
   for i2_cnt in $(seq $a_vaultcnt) ; do
@@ -42,7 +51,7 @@ seal "transit" {
 }
 EOFT3
 
-  rm -f config_?.hcl 2>/dev/null
+  rm -f config_?.hcl 2>/dev/null 
 
   # Create each Vault server config file
   for i_cnt in $(seq 2 $a_vaultcnt) ; do
@@ -52,6 +61,7 @@ EOFT3
     export port_iha=$(( $icorrection * 10  + 8201 ))
     mkdir -p "${a_workingdir}/data/vault_raft_${i_cnt}"
     cat << EOFT2 >  config_${i_cnt}.hcl 
+pid_file      = "${a_workingdir}/logs/vault-${i_cnt}.pid"
 ui = true
 api_addr      = "http://127.0.0.1:${port_i}"
 cluster_addr  = "http://127.0.0.1:${port_iha}"
@@ -71,12 +81,11 @@ storage "raft" {
 EOFT2
     [ -s all_vault_servers.txt ] && cat all_vault_servers.txt >> config_${i_cnt}.hcl
     echo '}' >> config_${i_cnt}.hcl
-    # Adding transit seal for all the configs except the first vault server
-    #if [[ ${i_cnt} -gt 1 ]] ; then
     cat t_addon.txt >> config_${i_cnt}.hcl
-    #fi
+    [ $DEBUG -gt 0 ] && ( echo "Continue ===${FUNCNAME[*]}==== with the next Vault server?" ; read a_ans )
   done
   cat << EOFT4 > config_1.hcl
+pid_file      = "${a_workingdir}/logs/vault-1.pid"
 storage "inmem" {}
 
 listener "tcp" {
@@ -94,6 +103,7 @@ function vault_cleanup()
 {
   echo -ne "${hash_padding}Cleanup the vault logs and data files...\n"
   cd "${a_workingdir}/config"
+  # safety net for non existent directories
   [ $? -eq 0 ] && rm t_addon.txt all_vault_servers.txt 2>/dev/null && find . -type f  -print -exec rm -rf -- {} \;
   cd "${a_workingdir}/data"
   if [ $? -eq 0 ] ; then
@@ -115,12 +125,20 @@ function start_transit_vault()
 {
   echo "$hash_padding===${FUNCNAME[*]}==== "
   cd ${a_workingdir}/config
+  # safety net for non existent directories
+  [ $? -gt 0 ] && exit 1
   export VAULT_ADDR="http://127.0.0.1:8200" 
   export VAULT_LICENSE_PATH="${a_workingdir}/config/license.hclic"
-  vault server -log-level=trace -config=./config_1.hcl 1>/dev/null 2>/dev/null&
+  vault server -log-level=trace -config=./config_1.hcl 1>/dev/null &
+  echo 'Working on... '
   while : ; do
-    vault status 1>/dev/null
-    [ $? -eq 2 ] && break || sleep 1
+    echo -ne '\r - |'
+    vault status 1>/dev/null 2>/dev/null
+    if [ $? -eq 2 ] ; then
+	    break 1
+    else
+	    echo -ne '\r - \ '; sleep 1
+    fi
   done
   vault status
   #export INIT_RESPONSE=$(vault operator init -format=json -key-shares 1 -key-threshold 1 )
@@ -131,8 +149,7 @@ function start_transit_vault()
   echo "$UNSEAL_KEY" > unseal_key-vault_1
   echo "$VAULT_TOKEN" > root_token-vault_1
 
-  vault operator unseal "$UNSEAL_KEY" > unseal_keys_vault_1.txt
-  cat unseal_keys_vault_1.txt
+  vault operator unseal "$UNSEAL_KEY" > unseal_operation_vault_1.txt
   vault login "$VAULT_TOKEN"
   vault secrets enable transit
   vault write -f transit/keys/unseal_key
@@ -144,6 +161,8 @@ function start_vault()
 {
   echo "$hash_padding===${FUNCNAME[*]}==== "
   cd "${a_workingdir}/config" || (echo "No configuration directoy!" ; return 1)
+  # safety net for non existent directories
+  [ $? -gt 0 ] && exit 1
 
  for i_cnt in $(seq 2 ${a_vaultcnt} ) ; do
   echo " Starting Vault Server $i_cnt..."
@@ -156,11 +175,20 @@ function start_vault()
   vault server -log-level=trace -config=./config_${i_cnt}.hcl 2>/dev/null 1>/dev/null &
   #vault server -log-level=trace -config=./config_${i_cnt}.hcl &
   set +x
-  while : ; do
-    vault status 1>/dev/null 2>/dev/null
-    [ $? -eq 2 ] && break || sleep 1
+  lretrys=1
+  while [ $lretrys -lt $RETRYS ]  ; do
+    vault status 1>/dev/null 
+    [ $? -eq 2 ] && lretrys=98 || sleep 1
+    lretrys=$(( $lretrys + 1 ))
   done
-  [ $DEBUG -gt 0 ] && vault status
+  if [ $lretrys -eq 99 ] ; then
+     vault status
+  else
+     echo "Failed to start the Vault Server vault-${i_cnt}"
+     return 1
+  fi
+
+  [ $DEBUG -gt 0 ] && ( echo "Continue ===${FUNCNAME[*]}==== with the next Vault server?" ; read a_ans )
 done
   return 0
 }
@@ -169,6 +197,8 @@ function validate_vault()
 {
   echo "$hash_padding===${FUNCNAME[*]}==== "
   cd ${a_workingdir}/config
+  # safety net for non existent directories
+  [ $? -gt 0 ] && exit 1
   for i_cnt in $(seq 2 ${a_vaultcnt}) ; do
      local icorrection=$(( $i_cnt - 1 ))
      local port_i=$(( $icorrection * 10  + 8200 ))
@@ -180,13 +210,12 @@ function validate_vault()
      vault login "$VAULT_TOKEN"
      vault secrets enable -path=kv kv-v2
      vault kv put kv/apikey webapp=testvalueinthefield
-     sleep 1
-     vault kv get kv/apikey
      vault secrets list
      vault kv get kv/apikey
-     vault status
+     #vault secrets disable kv
      vault operator raft list-peers
-     echo "${hash_padding}Done testing"
+     echo "${hash_padding} Done testing"
+     [ $DEBUG -gt 0 ] && ( echo "Continue ===${FUNCNAME[*]}==== with the next Vault server?" ; read a_ans )
   done
   cd ${a_workingdir}
   return 0
@@ -196,6 +225,8 @@ function unseal_vault()
 {
   echo "$hash_padding===${FUNCNAME[*]}==== "
   cd ${a_workingdir}/config
+  # safety net for non existent directories
+  [ $? -gt 0 ] && exit 1
   local i_node=2 ; local icorrection=$(( $i_node - 1)) 
   local port_i=$(( $icorrection * 10  + 8200 ))
   export VAULT_ADDR="http://127.0.0.1:${port_i}" 
@@ -208,30 +239,19 @@ function unseal_vault()
   for i_cnt in $(seq 3 ${a_vaultcnt}) ; do
      #cp "root_token-vault_${i_node}" "root_token-vault_${i_cnt}"
      ln -s  "root_token-vault_${i_node}" "root_token-vault_${i_cnt}"
+     [ $DEBUG -gt 0 ] && ( echo "Continue ===${FUNCNAME[*]}==== with the next Vault server Vault-${i_cnt}?" ; read a_ans )
   done
   sleep 15
   [ $DEBUG -gt 0 ] && vault status
   return 0
-  # No need to init others
-  ##for i_cnt in $(seq 2 ${a_vaultcnt}) ; do
-  ##   local icorrection=$(( $i_cnt - 1 ))
-  ##   local port_i=$(( $icorrection * 10  + 8200 ))
-  ##   export VAULT_ADDR="http://127.0.0.1:${port_i}" 
-  ##   export INIT_RESPONSE=$(vault operator init -format=json -recovery-shares 1 -recovery-threshold 1 2>/dev/null )
-  ##   export RECOVERY_KEY=$(echo "$INIT_RESPONSE" | jq -r .unseal_keys_b64[0])
-  ##   export VAULT_TOKEN=$(echo "$INIT_RESPONSE" | jq -r .root_token)
-  ##   echo "$RECOVERY_KEY" > "recovery_key-vault_${i_cnt}"
-  ##   echo "$VAULT_TOKEN" > "root_token-vault_${i_cnt}"
-  ##   echo "${hash_padding}Unsealed the Vault Server Vault-${i_cnt} using Transit Key"
-  ##   sleep 15
-  ##   [ $DEBUG -gt 0 ] && vault status
-  ##done
-  ##return 0
 }
 
 function vault_ha_init()
 {
+  echo "${hash_padding}===${FUNCNAME[*]}==== "
   cd ${a_workingdir}/config
+  # safety net for non existent directories
+  [ $? -gt 0 ] && exit 1
   for i_cnt in $(seq 3 ${a_vaultcnt}) ; do
      local icorrection=$(( $i_cnt - 1 ))
      local port_i=$(( $icorrection * 10  + 8200 ))
@@ -246,6 +266,34 @@ function vault_ha_init()
      echo "${hash_padding}Cluster formation done."
   done
   cd ${a_workingdir}
+  return 0
+}
+
+function stop_vault()
+{
+  cd ${a_workingdir}/logs
+  # safety net for non existent directories
+  [ $? -gt 0 ] && exit 1
+  # Executing stop in reverse order
+
+  for i_cnt in $(seq ${a_vaultcnt} 1) ; do
+     local icorrection=$(( $i_cnt - 1 ))
+     local port_i=$(( $icorrection * 10  + 8200 ))
+     ##    vault operator raft list-peers
+     ##    vault operator raft remove-peer
+
+     local list_pids=$(ps -fe|grep vault|grep hcl|grep -e '-config=./config_'|awk '{print $2," "}')
+     pidtokill=$(cat ${a_workingdir}/logs/vault-${i_cnt}.pid)
+     for pidtocheck in  $(echo  ${list_pids}) ; do
+	     if [[ $pidtokill -eq $pidtocheck ]] ; then
+		echo "Found the Vault-${i_cnt} PID $pidtokill into ${list_pids}"
+		[ $pidtokill -gt 100 ] && kill -9  $pidtokill && sleep 1
+		break 1
+	     fi
+     done
+     echo "${hash_padding} Cluster formation updated."
+     [ $DEBUG -gt 0 ] && ( echo "Continue with the next Vault server?" ; read a_ans )
+  done
   return 0
 }
 
@@ -270,10 +318,17 @@ start_vault
 unseal_vault
 vault_ha_init
 validate_vault
-read x
-[ $DEBUG -gt 0 ] && ( echo -ne "${hash_padding}\nTesting and validation OK? (<Enter> for ending thje script)"  && read a_ans )
-echo -ne  "\n${hash_padding}Done.\n"
-killall vault
-vault_cleanup
 
+if [ $DEBUG -gt 0 ] ; then
+   echo -ne "${hash_padding}\nTesting and validation OK? (<Enter> for ending thje script)"  && read a_ans 
+else
+   echo -ne "${hash_padding}\nLeaving the servers running for $TESTWINDOW";sleep ${TESTWINDOW}
+fi
+echo -ne  "${hash_padding}Done.\n"
+stop_vault
+# No need to execute the global kill of all Vault servers as a new function is cleaning the Vault servers
+# based on the PIDs recorded into 'pid file' during startup.
+#killall vault
+
+vault_cleanup
 
