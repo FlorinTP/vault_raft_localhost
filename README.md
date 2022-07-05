@@ -63,9 +63,7 @@ This is expected behavior on multiple executions.
 This will allow the validation and the test scenarios in a step-by-step fashion.
 - While running in DEBUG mode the script will wait for confirmation for every block action.
 
-# One successful execution (waiting for test window to finish looks likei):
-```
-tree
+# One successful execution (waiting for test window to finish) looks like:
 ```
 vault_raft_localhost $ tree
 .
@@ -119,3 +117,4 @@ vault_raft_localhost $ tree
         └── vault-6.pid
 
 19 directories, 29 files
+```
