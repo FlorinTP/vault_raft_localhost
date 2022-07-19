@@ -1,10 +1,10 @@
-# vault_raft_localhost
+# Install Vault with Raft storage on localhost
 
 The repository is used for creating a test Vault+Raft Integrated storage playground.
 The script is written in Bash and was successfully tested on MAC (Intel and M1).
 
 
-# Prerequisites
+## Prerequisites
 Install the latest version of vault and bash for your distribution.
 As example for MAC, using brew:
 ```
@@ -12,7 +12,7 @@ brew install vault
 brew install bash
 ```
 
-# Running the Vault HA Cluster with Raft integrated storage
+## Running the Vault HA Cluster with Raft integrated storage
 The following block actions are executed by the functions from the script:
  - Validating the environment directory.
  - Creating the transit Vault server as (vault-1).
@@ -27,7 +27,7 @@ The following block actions are executed by the functions from the script:
  - Clean-up the files and folders: ./vault/config ./vault/data ./vault/logs
  
 
-# How to create the Vault HA Cluster
+## How to create the Vault HA Cluster
 - Clone the current repository or only the current script create_cluster.sh
 ```
 git clone github.com/FlorinTP/vault_raft_localhost
@@ -57,7 +57,7 @@ and observe the root_token files needed to login to UI.
 (** by using the VAULT_TOKEN from vault/config/root_token-vault_2 )
 
 
-# Additional facts:
+## Additional facts:
 - If the vault directory is present then a clean-up is needed.
 In this scenario, the script is singaling the vault directory presence and prints the delete instructions and exit.
 This is expected behavior on multiple executions of the script.
@@ -66,7 +66,7 @@ This is expected behavior on multiple executions of the script.
 This will allow the validation and the test scenarios in a step-by-step fashion.
 - While running in DEBUG mode the script will wait for confirmation for every block action.
 
-# One successful execution (waiting for test window to finish) looks like:
+## One successful execution (waiting for test window to finish) looks like:
 ```
 vault_raft_localhost $ tree
 .
